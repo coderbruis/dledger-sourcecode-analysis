@@ -39,6 +39,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * 领导选举
+ */
 public class DLedgerLeaderElector {
 
     private static Logger logger = LoggerFactory.getLogger(DLedgerLeaderElector.class);
@@ -92,7 +95,11 @@ public class DLedgerLeaderElector {
         }
     }
 
+    /**
+     * 定时刷新
+     */
     private void refreshIntervals(DLedgerConfig dLedgerConfig) {
+        // 心跳间隔MS
         this.heartBeatTimeIntervalMs = dLedgerConfig.getHeartBeatTimeIntervalMs();
         this.maxHeartBeatLeak = dLedgerConfig.getMaxHeartBeatLeak();
         this.minVoteIntervalMs = dLedgerConfig.getMinVoteIntervalMs();
@@ -356,6 +363,7 @@ public class DLedgerLeaderElector {
             voteRequest.setGroup(memberState.getGroup());
             voteRequest.setLedgerEndIndex(ledgerEndIndex);
             voteRequest.setLedgerEndTerm(ledgerEndTerm);
+            // 推荐自己为leader
             voteRequest.setLeaderId(memberState.getSelfId());
             voteRequest.setTerm(term);
             voteRequest.setRemoteId(id);
@@ -363,7 +371,7 @@ public class DLedgerLeaderElector {
             if (memberState.getSelfId().equals(id)) {
                 voteResponse = handleVote(voteRequest, true);
             } else {
-                //async
+                // 发起异步投票
                 voteResponse = dLedgerRpcService.vote(voteRequest);
             }
             responses.add(voteResponse);
@@ -531,11 +539,14 @@ public class DLedgerLeaderElector {
      * @throws Exception
      */
     private void maintainState() throws Exception {
+        // 当前节点是Leader
         if (memberState.isLeader()) {
             maintainAsLeader();
+            // 当前节点是follower
         } else if (memberState.isFollower()) {
             maintainAsFollower();
         } else {
+            // 当前节点是Candidate
             maintainAsCandidate();
         }
     }
@@ -695,6 +706,7 @@ public class DLedgerLeaderElector {
 
         @Override public void doWork() {
             try {
+                // 是否开启领导者选举，默认为true
                 if (DLedgerLeaderElector.this.dLedgerConfig.isEnableLeaderElector()) {
                     DLedgerLeaderElector.this.refreshIntervals(dLedgerConfig);
                     DLedgerLeaderElector.this.maintainState();

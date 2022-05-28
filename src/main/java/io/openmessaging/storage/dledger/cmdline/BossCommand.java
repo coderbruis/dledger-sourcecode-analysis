@@ -22,6 +22,13 @@ import io.openmessaging.storage.dledger.DLedgerConfig;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * DLedger库核心启动类
+ * append：向DLedger添加数据；
+ * get：根据索引去获取响应数据；
+ * readFile：
+ * leadershipTransfer：
+ */
 public class BossCommand {
 
     public static void main(String args[]) {
