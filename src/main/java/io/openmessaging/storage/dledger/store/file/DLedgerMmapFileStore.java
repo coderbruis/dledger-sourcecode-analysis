@@ -119,6 +119,11 @@ public class DLedgerMmapFileStore extends DLedgerStore {
         this.indexFileList.flush(0);
     }
 
+    /**
+     * 加载data和index目录文件
+     * indexFileList: /tmp/dledgerstore/dledger-n0/index
+     * dataFileList: /tmp/dledgerstore/dledger-n0/data
+     */
     public void load() {
         if (!hasLoaded.compareAndSet(false, true)) {
             return;
@@ -336,7 +341,9 @@ public class DLedgerMmapFileStore extends DLedgerStore {
     public DLedgerEntry appendAsLeader(DLedgerEntry entry) {
         PreConditions.check(memberState.isLeader(), DLedgerResponseCode.NOT_LEADER);
         PreConditions.check(!isDiskFull, DLedgerResponseCode.DISK_FULL);
+        // 从本地缓存获取dataBuffer
         ByteBuffer dataBuffer = localEntryBuffer.get();
+        // 从本地缓存获取indexBuffer
         ByteBuffer indexBuffer = localIndexBuffer.get();
         DLedgerEntryCoder.encode(entry, dataBuffer);
         int entrySize = dataBuffer.remaining();
@@ -355,10 +362,12 @@ public class DLedgerMmapFileStore extends DLedgerStore {
             for (AppendHook writeHook : appendHooks) {
                 writeHook.doHook(entry, dataBuffer.slice(), DLedgerEntry.BODY_OFFSET);
             }
+            // 往dataFile里追加数据
             long dataPos = dataFileList.append(dataBuffer.array(), 0, dataBuffer.remaining());
             PreConditions.check(dataPos != -1, DLedgerResponseCode.DISK_ERROR, null);
             PreConditions.check(dataPos == prePos, DLedgerResponseCode.DISK_ERROR, null);
             DLedgerEntryCoder.encodeIndex(dataPos, entrySize, CURRENT_MAGIC, nextIndex, memberState.currTerm(), indexBuffer);
+            // 往indexFile里追加数据
             long indexPos = indexFileList.append(indexBuffer.array(), 0, indexBuffer.remaining(), false);
             PreConditions.check(indexPos == entry.getIndex() * INDEX_UNIT_SIZE, DLedgerResponseCode.DISK_ERROR, null);
             if (logger.isDebugEnabled()) {

@@ -215,6 +215,7 @@ public class DLedgerServer implements DLedgerProtocolHandler {
                 } else {
                     DLedgerEntry dLedgerEntry = new DLedgerEntry();
                     dLedgerEntry.setBody(request.getBody());
+                    // 作为leader发送信息
                     DLedgerEntry resEntry = dLedgerStore.appendAsLeader(dLedgerEntry);
                     return dLedgerEntryPusher.waitAck(resEntry, false);
                 }

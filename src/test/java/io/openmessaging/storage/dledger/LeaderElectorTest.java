@@ -60,8 +60,11 @@ public class LeaderElectorTest extends ServerTestHarness {
         String group = UUID.randomUUID().toString();
         String peers = String.format("n0-localhost:%d;n1-localhost:%d;n2-localhost:%d", nextPort(), nextPort(), nextPort());
         List<DLedgerServer> servers = new ArrayList<>();
+        // 推荐n0为领导者
         servers.add(launchServer(group, peers, "n0"));
+        // 推荐n1为领导者
         servers.add(launchServer(group, peers, "n1"));
+        // 推荐n2为领导者
         servers.add(launchServer(group, peers, "n2"));
         Thread.sleep(2000);
         AtomicInteger leaderNum = new AtomicInteger(0);
@@ -71,36 +74,36 @@ public class LeaderElectorTest extends ServerTestHarness {
         Assertions.assertEquals(2, followerNum.get());
         Assertions.assertNotNull(leaderServer);
 
-        for (int i = 0; i < 10; i++) {
-            long maxTerm = servers.stream().max((o1, o2) -> {
-                if (o1.getMemberState().currTerm() < o2.getMemberState().currTerm()) {
-                    return -1;
-                } else if (o1.getMemberState().currTerm() > o2.getMemberState().currTerm()) {
-                    return 1;
-                } else {
-                    return 0;
-                }
-            }).get().getMemberState().currTerm();
-            DLedgerServer candidate = servers.get(i % servers.size());
-            candidate.getdLedgerLeaderElector().testRevote(maxTerm + 1);
-            Thread.sleep(2000);
-            leaderNum.set(0);
-            followerNum.set(0);
-            leaderServer = parseServers(servers, leaderNum, followerNum);
-            Assertions.assertEquals(1, leaderNum.get());
-            Assertions.assertEquals(2, followerNum.get());
-            Assertions.assertNotNull(leaderServer);
-            Assertions.assertTrue(candidate == leaderServer);
-        }
-        //write some data
-        for (int i = 0; i < 5; i++) {
-            AppendEntryRequest appendEntryRequest = new AppendEntryRequest();
-            appendEntryRequest.setGroup(group);
-            appendEntryRequest.setRemoteId(leaderServer.getMemberState().getSelfId());
-            appendEntryRequest.setBody("Hello Three Server".getBytes());
-            AppendEntryResponse appendEntryResponse = leaderServer.getdLedgerRpcService().append(appendEntryRequest).get();
-            Assertions.assertEquals(DLedgerResponseCode.SUCCESS.getCode(), appendEntryResponse.getCode());
-        }
+//        for (int i = 0; i < 10; i++) {
+//            long maxTerm = servers.stream().max((o1, o2) -> {
+//                if (o1.getMemberState().currTerm() < o2.getMemberState().currTerm()) {
+//                    return -1;
+//                } else if (o1.getMemberState().currTerm() > o2.getMemberState().currTerm()) {
+//                    return 1;
+//                } else {
+//                    return 0;
+//                }
+//            }).get().getMemberState().currTerm();
+//            DLedgerServer candidate = servers.get(i % servers.size());
+//            candidate.getdLedgerLeaderElector().testRevote(maxTerm + 1);
+//            Thread.sleep(2000);
+//            leaderNum.set(0);
+//            followerNum.set(0);
+//            leaderServer = parseServers(servers, leaderNum, followerNum);
+//            Assertions.assertEquals(1, leaderNum.get());
+//            Assertions.assertEquals(2, followerNum.get());
+//            Assertions.assertNotNull(leaderServer);
+//            Assertions.assertTrue(candidate == leaderServer);
+//        }
+//        //write some data
+//        for (int i = 0; i < 5; i++) {
+//            AppendEntryRequest appendEntryRequest = new AppendEntryRequest();
+//            appendEntryRequest.setGroup(group);
+//            appendEntryRequest.setRemoteId(leaderServer.getMemberState().getSelfId());
+//            appendEntryRequest.setBody("Hello Three Server".getBytes());
+//            AppendEntryResponse appendEntryResponse = leaderServer.getdLedgerRpcService().append(appendEntryRequest).get();
+//            Assertions.assertEquals(DLedgerResponseCode.SUCCESS.getCode(), appendEntryResponse.getCode());
+//        }
     }
 
     @Test

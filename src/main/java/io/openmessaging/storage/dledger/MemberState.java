@@ -127,6 +127,10 @@ public class MemberState {
         return currTerm;
     }
 
+    /**
+     * 将角色置为领导（Leader）
+     * @param term
+     */
     public synchronized void changeToLeader(long term) {
         PreConditions.check(currTerm == term, DLedgerResponseCode.ILLEGAL_MEMBER_STATE, "%d != %d", currTerm, term);
         this.role = LEADER;
@@ -134,6 +138,11 @@ public class MemberState {
         peersLiveTable.clear();
     }
 
+    /**
+     * 将角色置为跟随者（Follower）
+     * @param term
+     * @param leaderId
+     */
     public synchronized void changeToFollower(long term, String leaderId) {
         PreConditions.check(currTerm == term, DLedgerResponseCode.ILLEGAL_MEMBER_STATE, "%d != %d", currTerm, term);
         this.role = FOLLOWER;
@@ -141,6 +150,10 @@ public class MemberState {
         transferee = null;
     }
 
+    /**
+     * 将角色置为候选者（Candidate）
+     * @param term
+     */
     public synchronized void changeToCandidate(long term) {
         assert term >= currTerm;
         PreConditions.check(term >= currTerm, DLedgerResponseCode.ILLEGAL_MEMBER_STATE, "should %d >= %d", term, currTerm);

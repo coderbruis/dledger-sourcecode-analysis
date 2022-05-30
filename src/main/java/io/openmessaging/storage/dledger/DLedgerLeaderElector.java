@@ -155,6 +155,10 @@ public class DLedgerLeaderElector {
         }
     }
 
+    /**
+     * 将节点角色改变为leader
+     * @param term
+     */
     public void changeRoleToLeader(long term) {
         synchronized (memberState) {
             if (memberState.currTerm() == term) {
@@ -168,6 +172,10 @@ public class DLedgerLeaderElector {
         }
     }
 
+    /**
+     * 根据term任期数将角色改变为candidate候选者，参与leader竞选
+     * @param term
+     */
     public void changeRoleToCandidate(long term) {
         synchronized (memberState) {
             if (term >= memberState.currTerm()) {
@@ -195,32 +203,48 @@ public class DLedgerLeaderElector {
         handleRoleChange(term, MemberState.Role.FOLLOWER);
     }
 
+    /**
+     * 处理投票
+     * @param request       投票请求
+     * @param self          是否是给自己投票？
+     * @return
+     */
     public CompletableFuture<VoteResponse> handleVote(VoteRequest request, boolean self) {
         //hold the lock to get the latest term, leaderId, ledgerEndIndex
         synchronized (memberState) {
+            // 投票请求申请的新领导ID是在memberState里的peerMap中，否则抛出未知领导
             if (!memberState.isPeerMember(request.getLeaderId())) {
                 logger.warn("[BUG] [HandleVote] remoteId={} is an unknown member", request.getLeaderId());
                 return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.REJECT_UNKNOWN_LEADER));
             }
+            // TODO 逻辑待确定
             if (!self && memberState.getSelfId().equals(request.getLeaderId())) {
                 logger.warn("[BUG] [HandleVote] selfId={} but remoteId={}", memberState.getSelfId(), request.getLeaderId());
                 return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.REJECT_UNEXPECTED_LEADER));
             }
 
+            // 请求申请的领导任期小于最新的任期
             if (request.getLedgerEndTerm() < memberState.getLedgerEndTerm()) {
                 return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.REJECT_EXPIRED_LEDGER_TERM));
             } else if (request.getLedgerEndTerm() == memberState.getLedgerEndTerm() && request.getLedgerEndIndex() < memberState.getLedgerEndIndex()) {
+                // 请求申请的日志索引小于最新的日志索引
                 return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.REJECT_SMALL_LEDGER_END_INDEX));
             }
 
+            // 请求投票任期小于集群任期
             if (request.getTerm() < memberState.currTerm()) {
                 return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.REJECT_EXPIRED_VOTE_TERM));
             } else if (request.getTerm() == memberState.currTerm()) {
+                // 任期相同则进行投票选举逻辑
+
+                // 当前集群投票目标不为空，刚开始voteFor为空，集群没有leader
                 if (memberState.currVoteFor() == null) {
                     //let it go
                 } else if (memberState.currVoteFor().equals(request.getLeaderId())) {
+                    // 集群投票目标ID和请求投票的ID一致
                     //repeat just let it go
                 } else {
+                    // 集群投票目标ID和请求投票的ID不一致
                     if (memberState.getLeaderId() != null) {
                         return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.REJECT_ALREADY_HAS_LEADER));
                     } else {
@@ -228,6 +252,8 @@ public class DLedgerLeaderElector {
                     }
                 }
             } else {
+                // 请求任期大于集群当前任期
+
                 //stepped down by larger term
                 changeRoleToCandidate(request.getTerm());
                 needIncreaseTermImmediately = true;
@@ -243,6 +269,7 @@ public class DLedgerLeaderElector {
                 return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.REJECT_TAKING_LEADERSHIP));
             }
 
+            // 设置投票对象，并将任期次数持久化
             memberState.setCurrVoteFor(request.getLeaderId());
             return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.ACCEPT));
         }
@@ -355,6 +382,14 @@ public class DLedgerLeaderElector {
         }
     }
 
+    /**
+     * 进行投票选举
+     * @param term
+     * @param ledgerEndTerm
+     * @param ledgerEndIndex
+     * @return
+     * @throws Exception
+     */
     private List<CompletableFuture<VoteResponse>> voteForQuorumResponses(long term, long ledgerEndTerm,
         long ledgerEndIndex) throws Exception {
         List<CompletableFuture<VoteResponse>> responses = new ArrayList<>();
@@ -388,6 +423,10 @@ public class DLedgerLeaderElector {
         return false;
     }
 
+    /**
+     * 发起下次投票选举时间
+     * @return
+     */
     private long getNextTimeToRequestVote() {
         if (isTakingLeadership()) {
             return System.currentTimeMillis() + dLedgerConfig.getMinTakeLeadershipVoteIntervalMs() +
@@ -443,6 +482,7 @@ public class DLedgerLeaderElector {
                         throw ex;
                     }
                     logger.info("[{}][GetVoteResponse] {}", memberState.getSelfId(), JSON.toJSONString(x));
+                    System.out.println("[" + memberState.getSelfId() + "][GetVoteResponse] {" + JSON.toJSONString(x) + "}" + " " + Thread.currentThread().getName() + "->" + Thread.currentThread().getId());
                     if (x.getVoteResult() != VoteResponse.RESULT.UNKNOWN) {
                         validNum.incrementAndGet();
                     }
@@ -525,7 +565,9 @@ public class DLedgerLeaderElector {
         logger.info("[{}] [PARSE_VOTE_RESULT] cost={} term={} memberNum={} allNum={} acceptedNum={} notReadyTermNum={} biggerLedgerNum={} alreadyHasLeader={} maxTerm={} result={}",
             memberState.getSelfId(), lastVoteCost, term, memberState.peerSize(), allNum, acceptedNum, notReadyTermNum, biggerLedgerNum, alreadyHasLeader, knownMaxTermInGroup.get(), parseResult);
 
+        System.out.println("votePassed result = " + parseResult + " " + Thread.currentThread().getName() + "->" + Thread.currentThread().getId());
         if (parseResult == VoteResponse.ParseResult.PASSED) {
+            // 选举成功，成功选出了leader
             logger.info("[{}] [VOTE_RESULT] has been elected to be the leader in term {}", memberState.getSelfId(), term);
             changeRoleToLeader(term);
         }

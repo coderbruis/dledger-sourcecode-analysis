@@ -34,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class DefaultMmapFile extends ReferenceResource implements MmapFile {
+    // PAGE_SIZE大小
     public static final int OS_PAGE_SIZE = 1024 * 4;
     protected static Logger logger = LoggerFactory.getLogger(DefaultMmapFile.class);
     private static final AtomicLong TOTAL_MAPPED_VIRTUAL_MEMORY = new AtomicLong(0);
