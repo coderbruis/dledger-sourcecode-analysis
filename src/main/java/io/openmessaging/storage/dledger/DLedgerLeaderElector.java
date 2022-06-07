@@ -533,6 +533,7 @@ public class DLedgerLeaderElector {
         }
 
         try {
+            // 不同的候选者随机超时时间不同
             voteLatch.await(2000 + random.nextInt(maxVoteIntervalMs), TimeUnit.MILLISECONDS);
         } catch (Throwable ignore) {
 
